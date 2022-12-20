@@ -1,0 +1,61 @@
+{
+	"name": "mmorpg-priv",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedFirst": {
+			"$ignoreUnknownInstances": true,
+			"$path": "src/ReplicatedFirst"
+		},
+		"ReplicatedStorage": {
+			"$className": "ReplicatedStorage",
+			"$ignoreUnknownInstances": true,
+			"$path": "src/ReplicatedStorage",
+			"Assets": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"$path": "assets/ReplicatedStorage"
+			}
+		},
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$ignoreUnknownInstances": true,
+			"$path": "src/ServerScriptService"
+		},
+		"ServerStorage": {
+			"$className": "ServerStorage",
+			"$ignoreUnknownInstances": true,
+			"$path": "src/ServerStorage",
+			"Assets": {
+				"$className": "Folder",
+				"$ignoreUnknownInstances": true,
+				"$path": "assets/ServerStorage"
+			}
+		},
+		"StarterGui": {
+			"$className": "StarterGui",
+			"$ignoreUnknownInstances": true,
+			"Interface": {
+				"$className" : "ScreenGui",
+				"$ignoreUnknownInstances": true,
+				"$properties": {
+					"ResetOnSpawn": false,
+					"IgnoreGuiInset": true
+				}
+			}
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"$ignoreUnknownInstances": true,
+			"StarterPlayerScripts": {
+				"$className": "StarterPlayerScripts",
+				"$ignoreUnknownInstances": true,
+				"$path": "src/StarterPlayerScripts",
+				"Assets": {
+					"$className": "Folder",
+					"$ignoreUnknownInstances": true,
+					"$path": "assets/StarterPlayerScripts"
+				}
+			}
+		}
+	}
+}
