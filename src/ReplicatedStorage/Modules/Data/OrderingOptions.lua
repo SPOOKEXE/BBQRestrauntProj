@@ -2,6 +2,7 @@
 local Module = {}
 
 Module.MaxOrderForItem = 4
+Module.MaxOrderTime = 20
 
 Module.MenuSections = {
 	'Entrees',

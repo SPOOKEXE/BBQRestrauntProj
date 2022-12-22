@@ -1,4 +1,5 @@
 
+local Players = game:GetService('Players')
 local ServerStorage = game:GetService('ServerStorage')
 local ServerAssets = ServerStorage:WaitForChild('Assets')
 local ServerModules = require(ServerStorage:WaitForChild('Modules'))
@@ -8,11 +9,18 @@ local NPCClassModule = ServerModules.Classes.NPC
 local ReplicatedStorage = game:GetService('ReplicatedStorage')
 local ReplicatedModules = require(ReplicatedStorage:WaitForChild('Modules'))
 
+local RemoteService = ReplicatedModules.Services.RemoteService
+local OrderRemoteEvent = RemoteService:GetRemote('OrderEvent', 'RemoteEvent', false)
+
 local OrderingOptionsModule = ReplicatedModules.Data.OrderingOptions
 
 local SystemsContainer = {}
 
-local ActiveNPCCache = {}
+local ActiveNPCCache = {} -- players that have called employees
+local ActiveTableCache = {} -- tables that have called employees
+
+local ActiveSeatOccupants = {} -- [TableModel] = { ...PlayersInTheSeats... }
+local PlayerOrderCache = {} -- [PlayerInstance] = { ...OrderData...}
 
 -- // Module // --
 local Module = {}
@@ -36,7 +44,7 @@ function Module:ValidateOrderRequest(orderData)
 		validatedOrder[itemID] = numberOfItems
 		totalItems += 1
 	end
-	return totalItems ~= 0 and validatedOrder or false
+	return totalItems ~= 0 and validatedOrder
 end
 
 function Module:SpawnEmployeeNPC()
@@ -46,22 +54,56 @@ function Module:SpawnEmployeeNPC()
 	return NPCClassModule.New(BaseDummy)
 end
 
+function Module:DistributeOrderItems(OrderDict, TableModel)
+	for _, LocalPlayer in ipairs( ActiveSeatOccupants[TableModel] ) do
+		if OrderDict[LocalPlayer] then
+			-- give items
+			print('Give player these items; ', OrderDict[LocalPlayer])
+		end
+	end
+end
+
 function Module:RequestTableOrders(TableModel)
+	if not ActiveSeatOccupants[TableModel] then
+		return -- no one is at the table, ignore
+	end
+
 	-- give all people at the table the order gui
+	for _, LocalPlayer in ipairs( ActiveSeatOccupants[TableModel] ) do
+		PlayerOrderCache[LocalPlayer] = nil
+		OrderRemoteEvent:FireClient(LocalPlayer)
+	end
 
 	-- wait for all orders to come in (or timeout)
+	local startTime = time()
+	while time() - startTime < OrderingOptionsModule.MaxOrderTime do
+		local allOrdersReceived = true
+		for _, LocalPlayer in ipairs( ActiveSeatOccupants[TableModel] ) do
+			if not PlayerOrderCache[LocalPlayer] then
+				allOrdersReceived = false
+				break
+			end
+		end
+		if allOrdersReceived then
+			break
+		end
+		task.wait(0.5)
+	end
 
 	-- return orders
-
-	return { }
+	local Orders = {}
+	for _, LocalPlayer in ipairs( ActiveSeatOccupants[TableModel] ) do
+		Orders[LocalPlayer] = PlayerOrderCache[LocalPlayer]
+	end
+	return Orders
 end
 
 function Module:OnTableEmployeeCall(LocalPlayer, TableModel)
-	if ActiveNPCCache[LocalPlayer] or TableModel[TableModel] then
+	if ActiveNPCCache[LocalPlayer] or ActiveTableCache[TableModel] then
 		return
 	end
 	ActiveNPCCache[LocalPlayer] = true
-	TableModel[TableModel] = true
+	ActiveTableCache[TableModel] = true
 
 	-- summon npc
 	local EmployeeNPC = Module:SpawnEmployeeNPC()
@@ -99,14 +141,33 @@ function Module:OnTableEmployeeCall(LocalPlayer, TableModel)
 	EmployeeNPC:Destroy()
 
 	ActiveNPCCache[LocalPlayer] = nil
-	TableModel[TableModel] = nil
+	ActiveTableCache[TableModel] = nil
+end
+
+function Module:OnSeatOccupantChanged(SeatInstance, TableModel)
+	local PlayerInstance = SeatInstance.Occupant and Players:GetPlayerFromCharacter(SeatInstance.Occupant)
+	ActiveSeatOccupants[TableModel] = PlayerInstance
 end
 
 function Module:Init(otherSystems)
 	SystemsContainer = otherSystems
 
+	OrderRemoteEvent.OnServerEvent:Connect(function(LocalPlayer, Order)
+		if PlayerOrderCache[LocalPlayer] then
+			return
+		end
+		PlayerOrderCache[LocalPlayer] = Module:ValidateOrderRequest(Order)
+	end)
+
 	--[[
 		for _, TableModel in ipairs( workspace.ActiveTables ) do
+
+			for _, SeatPart in ipairs(TableModel.Seats:GetChildren()) do
+				SeatPart:GetPropertyChangedSignal('Occupant'):Connect(function()
+					Module:OnSeatOccupantChanged(SeatPart, TableModel)
+				end)
+			end
+
 			workspace.ActiveTables.EmployeeCall.MouseClick:Connect(function(LocalPlayer)
 				Module:OnTableEmployeeCall(LocalPlayer, TableModel)
 			end)
