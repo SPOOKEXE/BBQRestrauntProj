@@ -144,9 +144,40 @@ function Module:OnTableEmployeeCall(LocalPlayer, TableModel)
 	ActiveTableCache[TableModel] = nil
 end
 
-function Module:OnSeatOccupantChanged(SeatInstance, TableModel)
-	local PlayerInstance = SeatInstance.Occupant and Players:GetPlayerFromCharacter(SeatInstance.Occupant)
-	ActiveSeatOccupants[TableModel] = PlayerInstance
+local LastOccupantCache = {}
+function Module:OnOccupantChanged(SeatPart, TableModel)
+	if not ActiveSeatOccupants[TableModel] then
+		ActiveSeatOccupants[TableModel] = {}
+	end
+	local Occupant = SeatPart.Occupant
+	local PlayerInstance = Occupant and Players:GetPlayerFromCharacter(Occupant.Parent)
+	if PlayerInstance then
+		table.insert(ActiveSeatOccupants[TableModel], PlayerInstance )
+	elseif LastOccupantCache[SeatPart] then
+		local index = table.find(ActiveSeatOccupants[TableModel], LastOccupantCache[SeatPart])
+		if index then
+			table.remove(ActiveSeatOccupants[TableModel], index )
+		end
+	end
+	LastOccupantCache[SeatPart] = PlayerInstance
+end
+
+function Module:OnPlayerRemoving(LocalPlayer)
+	for SeatPart, LastOccupant in pairs( LastOccupantCache ) do
+		if LastOccupant == LocalPlayer then
+			LastOccupantCache[SeatPart] = nil
+		end
+	end
+
+	for _, SeatedPlayers in pairs( ActiveSeatOccupants ) do
+		local index = table.find(SeatedPlayers, LocalPlayer)
+		if index then
+			table.remove(SeatedPlayers, index)
+		end
+	end
+
+	ActiveNPCCache[LocalPlayer] = nil
+	PlayerOrderCache[LocalPlayer] = nil
 end
 
 function Module:Init(otherSystems)
@@ -159,20 +190,22 @@ function Module:Init(otherSystems)
 		PlayerOrderCache[LocalPlayer] = Module:ValidateOrderRequest(Order)
 	end)
 
-	--[[
-		for _, TableModel in ipairs( workspace.ActiveTables ) do
-
-			for _, SeatPart in ipairs(TableModel.Seats:GetChildren()) do
-				SeatPart:GetPropertyChangedSignal('Occupant'):Connect(function()
-					Module:OnSeatOccupantChanged(SeatPart, TableModel)
-				end)
-			end
-
-			workspace.ActiveTables.EmployeeCall.MouseClick:Connect(function(LocalPlayer)
-				Module:OnTableEmployeeCall(LocalPlayer, TableModel)
+	for _, TableModel in ipairs( workspace.ActiveTables ) do
+		for _, SeatPart in ipairs(TableModel.Seats:GetChildren()) do
+			SeatPart:GetPropertyChangedSignal('Occupant'):Connect(function()
+				Module:OnOccupantChanged(SeatPart, TableModel)
 			end)
+			Module:OnOccupantChanged(SeatPart, TableModel)
 		end
-	]]
+
+		workspace.ActiveTables.EmployeeCall.MouseClick:Connect(function(LocalPlayer)
+			Module:OnTableEmployeeCall(LocalPlayer, TableModel)
+		end)
+	end
+
+	Players.PlayerRemoving:Connect(function(LocalPlayer)
+		Module:OnPlayerRemoving(LocalPlayer)
+	end)
 end
 
 return Module
